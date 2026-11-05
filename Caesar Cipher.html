@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Caesar Cipher</title>
+<style>
+:root{--bg:#e8ecf2;--panel:#f6f8fb;--ink:#14213d;--muted:#5b6784;--brass:#a9761c;--line:#c5cddb;--err:#b3261e;color-scheme:light;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1525;--panel:#16203a;--ink:#e7eaf2;--muted:#9aa5c0;--brass:#e0ab4a;--line:#2b3858;--err:#ff8a80;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1525;--panel:#3a3d44;--ink:#e7eaf2;--muted:#9aa5c0;--brass:#e0ab4a;--line:#2b3858;--err:#ff8a80;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Iowan Old Style",Georgia,"Times New Roman",serif}
+main{max-width:980px;margin:0 auto;padding:28px 20px 48px}
+h1{font-size:clamp(2rem,6vw,3.2rem);line-height:1.05;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:0 0 28px;max-width:52ch}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
+.wheel{background:var(--panel);border:1px solid var(--line);border-radius:50%;aspect-ratio:1;width:100%;max-width:420px;margin:0 auto;padding:6px}
+.wheel svg{width:100%;height:100%;display:block}
+.ring{transform-box:view-box;transform-origin:center;transition:transform .45s cubic-bezier(.3,.7,.2,1)}
+@media (prefers-reduced-motion:reduce){.ring{transition:none}}
+.wheel text{font:600 13px ui-monospace,Menlo,Consolas,monospace;fill:var(--ink)}
+.wheel .inner text{fill:var(--brass);font-size:14px}
+.cap{text-align:center;color:var(--muted);font-size:.92rem;margin:10px 0 0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:16px}
+.seg button{font:inherit;padding:10px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+label{display:block;font-weight:600;margin:14px 0 6px}
+.row{display:flex;gap:12px;align-items:center}
+input[type=range]{flex:1;accent-color:var(--brass)}
+input[type=number]{width:4.5rem;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+textarea{width:100%;min-height:110px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);resize:vertical}
+.out{min-height:110px;white-space:pre-wrap;word-break:break-word;padding:10px;border:1px dashed var(--brass);border-radius:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.95rem}
+.out.empty{color:var(--muted);font-family:inherit}
+.err{color:var(--err);min-height:1.5em;margin:6px 0 0;font-size:.92rem}
+.copy{margin-top:10px;font:inherit;padding:9px 16px;border:0;border-radius:6px;background:var(--brass);color:#fff;cursor:pointer}
+:root[data-theme="dark"] .copy{color:#14213d}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .copy{color:#14213d}}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+<h1>Caesar cipher</h1>
+<p class="sub">Shift every letter by a fixed number to hide a message, or shift it back to read one. Spaces, numbers and punctuation stay as they are.</p>
+<div class="grid">
+  <section>
+    <div class="wheel"><svg id="wheel" viewBox="0 0 320 320" role="img" aria-label="Cipher wheel showing the current shift"></svg></div>
+    <p class="cap" id="cap"></p>
+  </section>
+  <section class="panel">
+    <div class="seg" role="group" aria-label="Mode">
+      <button id="bE" aria-pressed="true">Encrypt</button>
+      <button id="bD" aria-pressed="false">Decrypt</button>
+    </div>
+    <label for="shiftNum">Shift (1 to 25)</label>
+    <div class="row">
+      <input type="range" id="shiftRange" min="1" max="25" value="3" aria-label="Shift slider">
+      <input type="number" id="shiftNum" min="1" max="25" value="3">
+    </div>
+    <p class="err" id="err" role="alert"></p>
+    <label for="msg" id="msgLabel">Message to encrypt</label>
+    <textarea id="msg" placeholder="Type or paste your message"></textarea>
+    <label>Result</label>
+    <div class="out empty" id="out" aria-live="polite">Type a message to see the result here.</div>
+    <button class="copy" id="copy">Copy result</button>
+  </section>
+</div>
+</main>
+
+<script>
+// ---------- Setup ----------
+var letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+var mode = "encrypt";   // will be "encrypt" or "decrypt"
+
+
+// ---------- The cipher (the same idea as your Python code) ----------
+function caesar(text, shift, mode) {
+  var result = "";
+
+  // Decrypting is just shifting backwards.
+  if (mode === "decrypt") {
+    shift = -shift;
+  }
+
+  // Go through the message one character at a time.
+  for (var i = 0; i < text.length; i++) {
+    var char = text[i];
+    var position = letters.indexOf(char.toUpperCase());
+
+    if (position === -1) {
+      // Not a letter (space, number, punctuation), so keep it as it is.
+      result = result + char;
+    } else {
+      // Move along the alphabet. The % 26 wraps Z back around to A.
+      var newPosition = (position + shift + 26) % 26;
+      var newChar = letters[newPosition];
+
+      // Keep small letters small.
+      if (char === char.toLowerCase()) {
+        newChar = newChar.toLowerCase();
+      }
+      result = result + newChar;
+    }
+  }
+  return result;
+}
+
+
+// ---------- Draw the wheel ----------
+function drawWheel() {
+  var circles = '<circle cx="160" cy="160" r="150" fill="none" style="stroke:var(--line)"/>' +
+                '<circle cx="160" cy="160" r="118" fill="none" style="stroke:var(--line)"/>';
+  var outerLetters = "";
+  var innerLetters = "";
+
+  // Put each of the 26 letters at its own angle around the circle.
+  for (var i = 0; i < 26; i++) {
+    var angle = i * 360 / 26;
+    var rotate = 'transform="rotate(' + angle + ' 160 160)"';
+    outerLetters += '<text x="160" y="24" text-anchor="middle" dominant-baseline="central" ' + rotate + '>' + letters[i] + '</text>';
+    innerLetters += '<text x="160" y="58" text-anchor="middle" dominant-baseline="central" ' + rotate + '>' + letters[i] + '</text>';
+  }
+
+  var innerRings = '<circle cx="160" cy="160" r="118" fill="none" stroke-width="1.5" style="stroke:var(--brass)"/>' +
+                   '<circle cx="160" cy="160" r="84" fill="none" stroke-width="1.5" style="stroke:var(--brass)"/>';
+  var marker = '<line x1="160" y1="4" x2="160" y2="40" stroke-width="2" style="stroke:var(--brass)"/>';
+
+  document.getElementById("wheel").innerHTML =
+    circles + outerLetters +
+    '<g class="ring inner" id="inner">' + innerRings + innerLetters + '</g>' +
+    marker;
+}
+
+
+// ---------- Update the page ----------
+function update() {
+  var shift = Number(document.getElementById("shiftNum").value);
+  var message = document.getElementById("msg").value;
+  var output = document.getElementById("out");
+  var error = document.getElementById("err");
+
+  // Same checks as your Python code.
+  if (!Number.isInteger(shift) || shift < 1 || shift > 25) {
+    error.textContent = "Shift must be a whole number from 1 to 25.";
+    output.className = "out empty";
+    output.textContent = "Fix the shift to see the result.";
+    return;
+  }
+  error.textContent = "";
+
+  // Turn the inner ring so it matches the shift.
+  document.getElementById("inner").style.transform = "rotate(" + (-shift * 360 / 26) + "deg)";
+
+  if (mode === "encrypt") {
+    document.getElementById("cap").textContent = "Find a letter on the outer ring to read its coded letter on the inner ring.";
+  } else {
+    document.getElementById("cap").textContent = "Find a letter on the inner ring to read its original on the outer ring.";
+  }
+
+  // Show the result.
+  if (message === "") {
+    output.className = "out empty";
+    output.textContent = "Type a message to see the result here.";
+  } else {
+    output.className = "out";
+    output.textContent = caesar(message, shift, mode);
+  }
+}
+
+
+// ---------- Buttons and inputs ----------
+document.getElementById("bE").onclick = function () {
+  mode = "encrypt";
+  document.getElementById("bE").setAttribute("aria-pressed", "true");
+  document.getElementById("bD").setAttribute("aria-pressed", "false");
+  document.getElementById("msgLabel").textContent = "Message to encrypt";
+  update();
+};
+
+document.getElementById("bD").onclick = function () {
+  mode = "decrypt";
+  document.getElementById("bE").setAttribute("aria-pressed", "false");
+  document.getElementById("bD").setAttribute("aria-pressed", "true");
+  document.getElementById("msgLabel").textContent = "Message to decrypt";
+  update();
+};
+
+// Moving the slider copies its value into the number box.
+document.getElementById("shiftRange").oninput = function () {
+  document.getElementById("shiftNum").value = this.value;
+  update();
+};
+
+// Typing in the number box moves the slider to match.
+document.getElementById("shiftNum").oninput = function () {
+  document.getElementById("shiftRange").value = this.value;
+  update();
+};
+
+document.getElementById("msg").oninput = update;
+
+document.getElementById("copy").onclick = function () {
+  var button = this;
+  var text = document.getElementById("out").textContent;
+  if (document.getElementById("out").className.indexOf("empty") !== -1) {
+    return;   // nothing to copy yet
+  }
+  try {
+    navigator.clipboard.writeText(text);
+    button.textContent = "Copied";
+    setTimeout(function () { button.textContent = "Copy result"; }, 1500);
+  } catch (e) {
+    button.textContent = "Select the text and copy it";
+  }
+};
+
+
+// ---------- Start ----------
+drawWheel();
+update();
+</script>
+</body>
+</html>
