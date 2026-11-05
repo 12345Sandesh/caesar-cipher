@@ -16,4 +16,4 @@ Each letter moves forward in the alphabet by the shift (decrypting moves it back
 I used Claude (an AI assistant) to explore how my Python logic could become a web app. The AI generated the page layout and styling and helped me simplify the JavaScript. I wrote the original Python cipher and understand the core logic. I used AI to learn, and I'm being open about where it helped.
 
 ## Live demo
-(Add your GitHub Pages link here once it's set up)
+[Test it live ](https://12345sandesh.github.io/caesar-cipher/)
